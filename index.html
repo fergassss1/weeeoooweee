@@ -2,12 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>weeeoooweee</title>
     <style>
         @font-face {
             font-family: 'Cal Sans UI';
-            /* Direct link to the raw font file for GitHub Pages compatibility */
             src: url('https://raw.githubusercontent.com/calcom/sans-ui/main/fonts/webfonts/CalSansUI-SemiBold.woff2') format('woff2');
         }
 
@@ -16,6 +15,7 @@
             overflow: hidden;
             background-color: #ffffff;
             font-family: 'Cal Sans UI', sans-serif;
+            touch-action: none; /* Prevents scrolling while interacting with objects */
         }
 
         canvas { display: block; }
@@ -29,7 +29,7 @@
     const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Body } = Matter;
 
     const engine = Engine.create();
-    engine.gravity.y = 0; // Floating effect
+    engine.gravity.y = 0; // Zero gravity for floating
 
     const render = Render.create({
         element: document.body,
@@ -39,56 +39,72 @@
             height: window.innerHeight,
             wireframes: false,
             background: 'transparent',
-            pixelRatio: window.devicePixelRatio // Sharpness on high-res screens
+            pixelRatio: window.devicePixelRatio
         }
     });
 
-    // 1. Invisible Walls
-    const wallOptions = { isStatic: true, render: { visible: false } };
-    const walls = [
-        Bodies.rectangle(window.innerWidth/2, -50, window.innerWidth, 100, wallOptions),
-        Bodies.rectangle(window.innerWidth/2, window.innerHeight + 50, window.innerWidth, 100, wallOptions),
-        Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight, wallOptions),
-        Bodies.rectangle(window.innerWidth + 50, window.innerHeight/2, 100, window.innerHeight, wallOptions)
-    ];
-    Composite.add(engine.world, walls);
+    // 1. Invisible Wall Boundaries (keeps them inside the screen)
+    const wallOptions = { 
+        isStatic: true, 
+        render: { visible: false },
+        restitution: 1 // Makes objects bounce off walls without losing speed
+    };
+    
+    const updateWalls = () => {
+        Composite.remove(engine.world, engine.world.bodies.filter(b => b.label === 'wall'));
+        const walls = [
+            Bodies.rectangle(window.innerWidth/2, -50, window.innerWidth, 100, { ...wallOptions, label: 'wall' }),
+            Bodies.rectangle(window.innerWidth/2, window.innerHeight + 50, window.innerWidth, 100, { ...wallOptions, label: 'wall' }),
+            Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight, { ...wallOptions, label: 'wall' }),
+            Bodies.rectangle(window.innerWidth + 50, window.innerHeight/2, 100, window.innerHeight, { ...wallOptions, label: 'wall' })
+        ];
+        Composite.add(engine.world, walls);
+    };
+    updateWalls();
 
-    // 2. Asset Loading (Icon)
+    // 2. Icon Asset
     const iconImg = new Image();
     iconImg.src = 'assets/symbol.svg'; 
 
-    // 3. Create the "fer" + "symbol" objects
-    const createObject = (x, y, content, color, isSymbol = false) => {
-        return Bodies.circle(x, y, 65, {
-            restitution: 0.9, 
-            frictionAir: 0.01,
-            chamfer: { radius: 30 }, // Makes it feel like a soft blob
+    // 3. Create "Floating" Characters
+    const createObject = (x, y, content, isSymbol = false) => {
+        return Bodies.circle(x, y, 40, {
+            restitution: 1,      // Perfectly bouncy
+            frictionAir: 0,      // No air resistance (keep moving forever)
+            friction: 0,
             render: {
-                fillStyle: color,
+                visible: false,  // Hide the physics circle shape
                 customData: { content, isSymbol }
             }
         });
     };
 
     const objects = [
-        createObject(200, 300, 'f', '#C3E7FF'),
-        createObject(400, 300, 'e', '#F2B8B5'),
-        createObject(600, 300, 'r', '#D2E3FC'),
-        createObject(800, 300, '', '#CEEAD6', true) // The Symbol
+        createObject(window.innerWidth * 0.2, 300, 'f'),
+        createObject(window.innerWidth * 0.4, 300, 'e'),
+        createObject(window.innerWidth * 0.6, 300, 'r'),
+        createObject(window.innerWidth * 0.8, 300, '', true)
     ];
 
     Composite.add(engine.world, objects);
 
-    // 4. Interaction
+    // 4. Interaction (Mouse & Touch)
+    const mouse = Mouse.create(render.canvas);
     const mouseConstraint = MouseConstraint.create(engine, {
-        mouse: Mouse.create(render.canvas),
-        constraint: { stiffness: 0.2, render: { visible: false } }
+        mouse: mouse,
+        constraint: {
+            stiffness: 0.2,
+            render: { visible: false }
+        }
     });
     Composite.add(engine.world, mouseConstraint);
 
-    // Initial movement push
+    // Give them a starting push
     objects.forEach(obj => {
-        Body.setVelocity(obj, { x: (Math.random() - 0.5) * 8, y: (Math.random() - 0.5) * 8 });
+        Body.setVelocity(obj, { 
+            x: (Math.random() - 0.5) * 6, 
+            y: (Math.random() - 0.5) * 6 
+        });
     });
 
     // 5. Custom Drawing Loop
@@ -107,12 +123,12 @@
             ctx.rotate(obj.angle);
 
             if (isSymbol) {
-                // Draw your SVG icon
-                const size = 60;
-                ctx.drawImage(iconImg, -size/2, -size/2, size, size);
+                const size = 80;
+                if (iconImg.complete) {
+                    ctx.drawImage(iconImg, -size/2, -size/2, size, size);
+                }
             } else {
-                // Draw the Cal Sans text
-                ctx.font = '600 60px "Cal Sans UI"';
+                ctx.font = '600 80px "Cal Sans UI"';
                 ctx.fillStyle = '#000';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
@@ -122,12 +138,11 @@
         });
     })();
 
-    Runner.run(Runner.create(), engine);
-
-    // Handle Resize
+    // Resize Handler
     window.addEventListener('resize', () => {
         render.canvas.width = window.innerWidth;
         render.canvas.height = window.innerHeight;
+        updateWalls();
     });
 </script>
 </body>
