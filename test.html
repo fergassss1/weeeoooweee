@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>weeeoooweee</title>
+    
+    <link rel="icon" type="image/svg+xml" href="assets/symbol.svg">
+
+    <style>
+        @font-face {
+            font-family: 'Cal Sans UI';
+            /* Direct link to the official webfont on GitHub */
+            src: url('https://raw.githubusercontent.com/calcom/sans-ui/main/fonts/webfonts/CalSansUI-SemiBold.woff2') format('woff2');
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Cal Sans UI', sans-serif;
+            touch-action: none; /* Prevents mobile browser bounce/scroll */
+        }
+
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+<script>
+    const { Engine, Render, Runner, Bodies, Composite, Mouse, MouseConstraint, Body } = Matter;
+
+    // 1. Setup Engine
+    const engine = Engine.create();
+    engine.gravity.y = 0; // Floating physics
+
+    const render = Render.create({
+        element: document.body,
+        engine: engine,
+        options: {
+            width: window.innerWidth,
+            height: window.innerHeight,
+            wireframes: false,
+            background: 'transparent',
+            pixelRatio: window.devicePixelRatio
+        }
+    });
+
+    // 2. Screen Boundaries (Invisible Walls)
+    const wallOptions = { 
+        isStatic: true, 
+        render: { visible: false },
+        restitution: 1 // Objects don't lose energy when hitting walls
+    };
+
+    let walls = [];
+    const createWalls = () => {
+        if (walls.length) Composite.remove(engine.world, walls);
+        walls = [
+            Bodies.rectangle(window.innerWidth/2, -50, window.innerWidth, 100, wallOptions), // Top
+            Bodies.rectangle(window.innerWidth/2, window.innerHeight + 50, window.innerWidth, 100, wallOptions), // Bottom
+            Bodies.rectangle(-50, window.innerHeight/2, 100, window.innerHeight, wallOptions), // Left
+            Bodies.rectangle(window.innerWidth + 50, window.innerHeight/2, 100, window.innerHeight, wallOptions)  // Right
+        ];
+        Composite.add(engine.world, walls);
+    };
+    createWalls();
+
+    // 3. Asset Loading
+    const iconImg = new Image();
+    iconImg.src = 'assets/symbol.svg';
+
+    // 4. Create Characters ("f", "e", "r", and Symbol)
+    // Adjust 'radius' to make the physical bounce area larger
+    const radius = Math.min(window.innerWidth, window.innerHeight) * 0.12; // Responsive sizing
+    
+    const createChar = (x, y, char, isSymbol = false) => {
+        return Bodies.circle(x, y, radius, {
+            restitution: 1,
+            frictionAir: 0,
+            friction: 0,
+            render: {
+                visible: false, // We draw the text manually in the loop
+                customData: { char, isSymbol }
+            }
+        });
+    };
+
+    const objects = [
+        createChar(window.innerWidth * 0.25, window.innerHeight * 0.5, 'f'),
+        createChar(window.innerWidth * 0.40, window.innerHeight * 0.5, 'e'),
+        createChar(window.innerWidth * 0.55, window.innerHeight * 0.5, 'r'),
+        createChar(window.innerWidth * 0.75, window.innerHeight * 0.5, '', true)
+    ];
+
+    Composite.add(engine.world, objects);
+
+    // 5. Interactivity (Touch & Mouse)
+    const mouse = Mouse.create(render.canvas);
+    const mouseConstraint = MouseConstraint.create(engine, {
+        mouse: mouse,
+        constraint: {
+            stiffness: 0.2,
+            render: { visible: false }
+        }
+    });
+    Composite.add(engine.world, mouseConstraint);
+
+    // Initial Push
+    objects.forEach(obj => {
+        Body.setVelocity(obj, { 
+            x: (Math.random() - 0.5) * 5, 
+            y: (Math.random() - 0.5) * 5 
+        });
+    });
+
+    // 6. Custom Render Loop (Drawing the actual bigger characters)
+    (function run() {
+        window.requestAnimationFrame(run);
+        Engine.update(engine);
+        Render.world(render);
+
+        const ctx = render.context;
+        objects.forEach(obj => {
+            const { x, y } = obj.position;
+            const { char, isSymbol } = obj.render.customData;
+
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate(obj.angle);
+
+            if (isSymbol) {
+                // Draw SVG icon - Size is 2x the radius
+                const iconSize = radius * 2.2;
+                if (iconImg.complete) {
+                    ctx.drawImage(iconImg, -iconSize/2, -iconSize/2, iconSize, iconSize);
+                }
+            } else {
+                // Draw Cal Sans Text - Size is proportional to radius
+                ctx.font = `600 ${radius * 2}px "Cal Sans UI"`;
+                ctx.fillStyle = '#000000';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(char, 0, 0);
+            }
+            ctx.restore();
+        });
+    })();
+
+    // Handle Window Resize
+    window.addEventListener('resize', () => {
+        render.canvas.width = window.innerWidth;
+        render.canvas.height = window.innerHeight;
+        createWalls();
+    });
+</script>
+
+</body>
+</html>
